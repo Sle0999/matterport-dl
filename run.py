@@ -239,17 +239,11 @@ def check_and_install_modules(script_dir, venv_dir):
 
     # If any modules are missing or have incorrect versions, install them
     if missing_modules:
-        # Determine path to pip executable
-        pip_executable = os.path.join(
-            venv_dir,
-            "Scripts" if sys.platform == "win32" else "bin",
-            "pip"
-        )
-
         debug_print(f"Installing/upgrading the following modules: {', '.join(missing_modules)}")
         try:
+            install_cmd = get_pip_install_command(venv_dir)
             # Use subprocess to run pip install
-            subprocess.check_call([pip_executable, "install", "-r", requirements_file])
+            subprocess.check_call(install_cmd + ["install", "-r", requirements_file])
 
             # After installation, update our package-to-module mapping
             # This is important for later calls where we might need to check other modules
@@ -261,6 +255,23 @@ def check_and_install_modules(script_dir, venv_dir):
         debug_print("All required modules are already installed with correct versions.")
 
     return package_to_import_mapping
+
+
+def get_pip_install_command(venv_dir):
+    # Determine path to pip executable
+    pip_executable = os.path.join(
+        venv_dir,
+        "Scripts" if sys.platform == "win32" else "bin",
+        "pip"
+    )
+    if os.path.exists(pip_executable):
+        return [pip_executable]
+
+    # Some distro Python builds create venv without pip. Bootstrap it and use python -m pip.
+    debug_print(f"pip executable not found at {pip_executable}, bootstrapping via ensurepip...", is_error=True)
+    subprocess.check_call([sys.executable, "-m", "ensurepip", "--upgrade"])
+    subprocess.check_call([sys.executable, "-m", "pip", "--version"])
+    return [sys.executable, "-m", "pip"]
 
 def parse_version(version_string):
     """Simple version parser for comparison."""

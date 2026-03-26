@@ -475,6 +475,50 @@ def extractJSDict(forWhat: str, str: str):
     return ret
 
 
+def parseShowcaseRuntimeDicts(showcase_cont: str):
+    compact = re.sub(r"\s+", "", showcase_cont)
+
+    js_match = re.search(r"\.u=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    if js_match is None:
+        raise Exception("Unable to locate JS chunk loader mapping in showcase runtime js file")
+    js_dicts = re.findall(r"\{[^{}]*\}", js_match.group(0))
+    if not js_dicts:
+        raise Exception("Unable to extract JS file key dictionary from showcase runtime js file")
+    js_named_dict = extractJSDict("showcase-runtime.js: namedJSFiles", js_dicts[0]) if len(js_dicts) > 1 else {}
+    js_key_dict = extractJSDict("showcase-runtime.js: JSFileToKey", js_dicts[-1])
+
+    css_match = re.search(r"\.miniCssF=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    if css_match is None:
+        raise Exception("Unable to locate CSS chunk loader mapping in showcase runtime js file")
+    css_dicts = re.findall(r"\{[^{}]*\}", css_match.group(0))
+    if not css_dicts:
+        css_named_dict = {}
+        css_key_dict = {}
+    elif len(css_dicts) == 1:
+        css_named_dict = extractJSDict("showcase-runtime.js: namedCSSFiles", css_dicts[0])
+        css_key_dict = css_named_dict
+    else:
+        css_named_dict = extractJSDict("showcase-runtime.js: namedCSSFiles", css_dicts[0])
+        css_key_dict = extractJSDict("showcase-runtime.js: CSSFileToKey", css_dicts[-1])
+
+    return js_named_dict, js_key_dict, css_named_dict, css_key_dict
+
+
+def parseShowcaseRuntimeJSFallbackFiles(showcase_cont: str, js_named_dict: dict[str, str], js_key_dict: dict[str, str]):
+    fallback_files: set[str] = set()
+
+    # IDs referenced by chunk loader calls are commonly requested as /js/<id>.js when no hash map entry exists.
+    referenced_chunks = set(re.findall(r"\.e\((\d+)\)", showcase_cont))
+    referenced_chunks.update(js_named_dict.keys())
+    referenced_chunks.update(js_named_dict.values())
+    referenced_chunks.update(js_key_dict.keys())
+
+    for chunk in referenced_chunks:
+        if chunk:
+            fallback_files.add(f"js/{chunk}.js")
+    return fallback_files
+
+
 async def downloadAssets(base, base_page_text):
     global PROGRESS, BASE_MATTERPORT_DOMAIN, MAIN_SHOWCASE_FILENAME
 
@@ -558,29 +602,7 @@ async def downloadAssets(base, base_page_text):
     #     9114: "core"
     # } [e] || e) + ".css"
 
-    match = re.search(
-        r"""
-                "js/"\+ # find js/+  (literal plus)
-                (?P<namedJSFiles>[^\[]+) #capture everything until the first [ character store in group namedJSFiles
-                (?P<JSFileToKey>.+?) #least greedy capture, so capture the minimum amount to make this regex still true
-                css #stopping when we see the css
-                (?P<namedCSSFiles>[^\[]+) #similar to before capture to first [
-                .+? #skip the minimum amount to get to next part
-                miniCss=.+? #find miniCss= then skip minimum to first &&
-                &&
-                (?P<CSSFileToKey>.+?) #capture minimum until we get to next &&
-                &&
-              """,
-        showcase_cont,
-        re.X,
-    )
-    if match is None:
-        raise Exception("Unable to extract js files and css files from showcase runtime js file")
-    groupDict = match.groupdict()
-    jsNamedDict = extractJSDict("showcase-runtime.js: namedJSFiles", groupDict["namedJSFiles"])
-    jsKeyDict = extractJSDict("showcase-runtime.js: JSFileToKey", groupDict["JSFileToKey"])
-    cssNamedDict = extractJSDict("showcase-runtime.js: namedCSSFiles", groupDict["namedCSSFiles"])
-    cssKeyDict = extractJSDict("showcase-runtime.js: CSSFileToKey", groupDict["CSSFileToKey"])
+    jsNamedDict, jsKeyDict, cssNamedDict, cssKeyDict = parseShowcaseRuntimeDicts(showcase_cont)
 
     for number, key in jsKeyDict.items():
         name = number
@@ -588,6 +610,16 @@ async def downloadAssets(base, base_page_text):
             name = jsNamedDict[name]
         file = f"js/{name}.{key}.js"
         typeDict[file] = "SHOWCASE_DISCOVERED_JS"
+        assets.append(file)
+    fallback_files = set(re.findall(r"\.e\((\d+)\)", showcase_cont))
+    fallback_files.update(jsNamedDict.keys())
+    fallback_files.update(jsNamedDict.values())
+    fallback_files.update(jsKeyDict.keys())
+    fallback_files = {f"js/{chunk}.js" for chunk in fallback_files if chunk}
+    for file in fallback_files:
+        if file in typeDict:
+            continue
+        typeDict[file] = "SHOWCASE_DISCOVERED_JS_FALLBACK"
         assets.append(file)
 
     for number, key in cssKeyDict.items():
@@ -620,7 +652,7 @@ async def downloadAssets(base, base_page_text):
         type = typeDict[asset]
         if local_file.endswith("/"):
             local_file = local_file + "index.html"
-        shouldExist = True
+        shouldExist = not type.startswith("SHOWCASE_DISCOVERED_JS_FALLBACK")
         toDownload.append(AsyncDownloadItem(type, shouldExist, f"{base}{asset}", local_file))
     await AsyncArrayDownload(toDownload)
     if react_vendor_filename and os.path.exists(react_vendor_filename):
