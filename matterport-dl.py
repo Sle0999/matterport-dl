@@ -596,6 +596,11 @@ async def downloadAssets(base, base_page_text):
         file = f"js/{name}.{key}.js"
         typeDict[file] = "SHOWCASE_DISCOVERED_JS"
         assets.append(file)
+    for file in parseShowcaseRuntimeJSFallbackFiles(showcase_cont, jsNamedDict, jsKeyDict):
+        if file in typeDict:
+            continue
+        typeDict[file] = "SHOWCASE_DISCOVERED_JS_FALLBACK"
+        assets.append(file)
 
     for number, key in cssKeyDict.items():
         name = number
@@ -627,7 +632,7 @@ async def downloadAssets(base, base_page_text):
         type = typeDict[asset]
         if local_file.endswith("/"):
             local_file = local_file + "index.html"
-        shouldExist = True
+        shouldExist = not type.startswith("SHOWCASE_DISCOVERED_JS_FALLBACK")
         toDownload.append(AsyncDownloadItem(type, shouldExist, f"{base}{asset}", local_file))
     await AsyncArrayDownload(toDownload)
     if react_vendor_filename and os.path.exists(react_vendor_filename):
