@@ -478,7 +478,7 @@ def extractJSDict(forWhat: str, str: str):
 def parseShowcaseRuntimeDicts(showcase_cont: str):
     compact = re.sub(r"\s+", "", showcase_cont)
 
-    js_match = re.search(r"\.u=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    js_match = re.search(r'"js/"\+.*?\.js"', compact)
     if js_match is None:
         raise Exception("Unable to locate JS chunk loader mapping in showcase runtime js file")
     js_dicts = re.findall(r"\{[^{}]*\}", js_match.group(0))
@@ -487,7 +487,7 @@ def parseShowcaseRuntimeDicts(showcase_cont: str):
     js_named_dict = extractJSDict("showcase-runtime.js: namedJSFiles", js_dicts[0]) if len(js_dicts) > 1 else {}
     js_key_dict = extractJSDict("showcase-runtime.js: JSFileToKey", js_dicts[-1])
 
-    css_match = re.search(r"\.miniCssF=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    css_match = re.search(r"miniCssF.*?\.css\"", compact)
     if css_match is None:
         raise Exception("Unable to locate CSS chunk loader mapping in showcase runtime js file")
     css_dicts = re.findall(r"\{[^{}]*\}", css_match.group(0))

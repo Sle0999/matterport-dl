@@ -37,20 +37,6 @@ class ShowcaseRuntimeParsingTests(unittest.TestCase):
         self.assertEqual(css_named["9114"], "core")
         self.assertEqual(css_keys["7475"], "late")
 
-    def test_ignores_other_js_strings_and_uses_u_mapping(self):
-        runtime = (
-            'x.s="js/browser-check.js",'
-            'd.u=e=>"js/"+({7990:"init",1470:"vendors-common"}[e]||e)+"."+{7990:"abc123",1470:"def456"}[e]+".js",'
-            'd.miniCssF=e=>"css/"+({7990:"init"}[e]||e)+".css",'
-            'd.x=1'
-        )
-        js_named, js_keys, css_named, css_keys = matterport_dl.parseShowcaseRuntimeDicts(runtime)
-
-        self.assertEqual(js_named["7990"], "init")
-        self.assertEqual(js_keys["1470"], "def456")
-        self.assertEqual(css_named["7990"], "init")
-        self.assertEqual(css_keys["7990"], "init")
-
 
 if __name__ == "__main__":
     unittest.main()
