@@ -478,7 +478,7 @@ def extractJSDict(forWhat: str, str: str):
 def parseShowcaseRuntimeDicts(showcase_cont: str):
     compact = re.sub(r"\s+", "", showcase_cont)
 
-    js_match = re.search(r"\.u=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    js_match = re.search(r'"js/"\+.*?\.js"', compact)
     if js_match is None:
         raise Exception("Unable to locate JS chunk loader mapping in showcase runtime js file")
     js_dicts = re.findall(r"\{[^{}]*\}", js_match.group(0))
@@ -487,7 +487,7 @@ def parseShowcaseRuntimeDicts(showcase_cont: str):
     js_named_dict = extractJSDict("showcase-runtime.js: namedJSFiles", js_dicts[0]) if len(js_dicts) > 1 else {}
     js_key_dict = extractJSDict("showcase-runtime.js: JSFileToKey", js_dicts[-1])
 
-    css_match = re.search(r"\.miniCssF=.*?(?=,[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*=|$)", compact)
+    css_match = re.search(r"miniCssF.*?\.css\"", compact)
     if css_match is None:
         raise Exception("Unable to locate CSS chunk loader mapping in showcase runtime js file")
     css_dicts = re.findall(r"\{[^{}]*\}", css_match.group(0))
@@ -502,21 +502,6 @@ def parseShowcaseRuntimeDicts(showcase_cont: str):
         css_key_dict = extractJSDict("showcase-runtime.js: CSSFileToKey", css_dicts[-1])
 
     return js_named_dict, js_key_dict, css_named_dict, css_key_dict
-
-
-def parseShowcaseRuntimeJSFallbackFiles(showcase_cont: str, js_named_dict: dict[str, str], js_key_dict: dict[str, str]):
-    fallback_files: set[str] = set()
-
-    # IDs referenced by chunk loader calls are commonly requested as /js/<id>.js when no hash map entry exists.
-    referenced_chunks = set(re.findall(r"\.e\((\d+)\)", showcase_cont))
-    referenced_chunks.update(js_named_dict.keys())
-    referenced_chunks.update(js_named_dict.values())
-    referenced_chunks.update(js_key_dict.keys())
-
-    for chunk in referenced_chunks:
-        if chunk:
-            fallback_files.add(f"js/{chunk}.js")
-    return fallback_files
 
 
 async def downloadAssets(base, base_page_text):
@@ -611,9 +596,7 @@ async def downloadAssets(base, base_page_text):
         file = f"js/{name}.{key}.js"
         typeDict[file] = "SHOWCASE_DISCOVERED_JS"
         assets.append(file)
-    fallback_parser = globals().get("parseShowcaseRuntimeJSFallbackFiles")
-    fallback_files = fallback_parser(showcase_cont, jsNamedDict, jsKeyDict) if callable(fallback_parser) else set()
-    for file in fallback_files:
+    for file in parseShowcaseRuntimeJSFallbackFiles(showcase_cont, jsNamedDict, jsKeyDict):
         if file in typeDict:
             continue
         typeDict[file] = "SHOWCASE_DISCOVERED_JS_FALLBACK"
