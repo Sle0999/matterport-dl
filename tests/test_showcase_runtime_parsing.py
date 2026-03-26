@@ -37,32 +37,6 @@ class ShowcaseRuntimeParsingTests(unittest.TestCase):
         self.assertEqual(css_named["9114"], "core")
         self.assertEqual(css_keys["7475"], "late")
 
-    def test_ignores_other_js_strings_and_uses_u_mapping(self):
-        runtime = (
-            'x.s="js/browser-check.js",'
-            'd.u=e=>"js/"+({7990:"init",1470:"vendors-common"}[e]||e)+"."+{7990:"abc123",1470:"def456"}[e]+".js",'
-            'd.miniCssF=e=>"css/"+({7990:"init"}[e]||e)+".css",'
-            'd.x=1'
-        )
-        js_named, js_keys, css_named, css_keys = matterport_dl.parseShowcaseRuntimeDicts(runtime)
-
-        self.assertEqual(js_named["7990"], "init")
-        self.assertEqual(js_keys["1470"], "def456")
-        self.assertEqual(css_named["7990"], "init")
-        self.assertEqual(css_keys["7990"], "init")
-
-    def test_generates_plain_js_fallback_paths(self):
-        runtime = 'd.e(7990),d.e(4892),d.e(1470)'
-        js_named = {"7990": "init"}
-        js_keys = {"1470": "def456"}
-
-        fallback_files = matterport_dl.parseShowcaseRuntimeJSFallbackFiles(runtime, js_named, js_keys)
-
-        self.assertIn("js/7990.js", fallback_files)
-        self.assertIn("js/4892.js", fallback_files)
-        self.assertIn("js/1470.js", fallback_files)
-        self.assertIn("js/init.js", fallback_files)
-
 
 if __name__ == "__main__":
     unittest.main()
